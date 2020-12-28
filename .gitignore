@@ -1,0 +1,6 @@
+models/*
+preds/*
+__pycache__/*
+ai/__pycache__/*
+venv/*
+.idea/*
