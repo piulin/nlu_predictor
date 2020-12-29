@@ -21,6 +21,9 @@ class EncoderRNN(nn.Module):
     def initHidden(self, device):
         return torch.zeros(1, 1, self.hidden_size, device=device)
 
+    def get_hidden(self, hidden):
+        return hidden
+
 
 
 class DecoderRNN(nn.Module):

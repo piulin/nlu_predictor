@@ -1,5 +1,6 @@
 import sys
 
+import gensim
 import torch
 
 from ai.seq2se2q_rnn import seq2seq
@@ -30,20 +31,63 @@ def train(args):
 
     dts.read_training_dataset( args ['train_data'] )
 
-    classifier = seq2seq( args ['hs'],
-                          dts.words_converter.no_entries(),
+    train_dts, test_dts = dts, dts
+
+    if args['D'] != None:
+        train_dts, test_dts = dts.train_test_splits(args['D'])
+
+    classifier = seq2seq(dts.words_converter.no_entries(),
                           dts.slots_converter.no_entries(),
                           dts.intent_converter.no_entries(),
                           device,
-                          args ['C'])
+                          args)
 
 
-    classifier.fit( dts, args ['e'], args['lr'] )
+    if args['E'] != None:
+        embeddings = gensim.models.KeyedVectors.load_word2vec_format(args['E'],
+                                                                binary=True)
+        classifier.pretrained_embeddings( train_dts, embeddings )
+
+    try:
+        classifier.fit( train_dts, test_dts, args ['e'], args['lr'] )
+    except KeyboardInterrupt:
+        pass
 
     if args['o'] != None:
 
         # write it into a file.
         classifier.dump( args ['o'] )
+
+
+
+def cont(args):
+    # get our working device
+    device = get_device(args)
+
+    # read training samples from disk, and prepare the dataset (i.e., shuffle, scaling, and moving the data to tensors.)
+
+    dts = dataset(device)
+
+    dts.read_training_dataset(args['train_data'])
+
+    train_dts, test_dts = dts, dts
+
+    if args['D'] != None:
+        train_dts, test_dts = dts.train_test_splits(args['D'])
+
+    classifier = seq2seq.load( args ['m'] )
+
+    try:
+        classifier.fit(train_dts, test_dts, args['e'], args['lr'])
+    except KeyboardInterrupt:
+        pass
+
+    if args['o'] != None:
+        # write it into a file.
+        classifier.dump(args['o'])
+
+
+
 
 
 def test (args):

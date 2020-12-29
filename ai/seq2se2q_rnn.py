@@ -6,9 +6,11 @@ import torch
 from torch import nn, optim
 
 from ai.ffnn import NeuralNet
+from ai.lstm import EncoderLSTM, DecoderLSTM
 from ai.rnn import EncoderRNN, DecoderRNN
 from assessment import assess
 from utils import timeSince
+from tqdm import tqdm
 
 
 class seq2seq(object):
@@ -16,19 +18,25 @@ class seq2seq(object):
 
 
     def __init__(self,
-                 hidden_size,
                  nwords,
                  nslots,
                  nintents,
                  device,
-                 nn_config_file):
+                 args):
 
         #hidden_size = 256
         #nwords = dts.words_converter.no_entries()
         #nslots = dts.slots_converter.no_entries()
-        self.encoder = EncoderRNN(nwords, hidden_size).to(device)
-        self.decoder = DecoderRNN(hidden_size, nslots).to(device)
-        self.ff_nn = NeuralNet(nn_config_file, hidden_size, nintents).to(device)
+        hidden_size = args['hs']
+        if args['architecture'] == 'lstm':
+            self.encoder = EncoderLSTM(nwords, hidden_size,bidirectional=args['bidirectional'],dropout=args['dropout'], freeze_embeddings=args['E'] != None).to(device)
+            self.decoder = DecoderLSTM(hidden_size, nslots,bidirectional=args['bidirectional'],dropout=args['dropout']).to(device)
+
+        else :
+            self.encoder = EncoderRNN(nwords, hidden_size).to(device)
+            self.decoder = DecoderRNN(hidden_size, nslots).to(device)
+
+        self.ff_nn = NeuralNet(args['C'], hidden_size, nintents).to(device)
         self.device = device
 
 
@@ -54,24 +62,24 @@ class seq2seq(object):
 
         input_length = input_tensor.size(0)
         target_length = target_tensor.size(0)
-
-        encoder_outputs = torch.zeros(input_length, self.encoder.hidden_size, device=self.device)
-
         loss = 0.
 
         for ei in range(input_length):
+
+
+
             encoder_output, encoder_hidden = self.encoder(
                 input_tensor[ei], encoder_hidden)
-            encoder_outputs[ei] = encoder_output[0, 0]
 
         decoder_input = torch.tensor([[SOS_token]], device=self.device)
 
         decoder_hidden = encoder_hidden
 
         # decide the intent
-        nnoutput = self.ff_nn(encoder_hidden[0])
+        nnoutput = self.ff_nn(self.encoder.get_hidden(encoder_hidden)[0])
 
         # print(f"nn output: {nnoutput}")
+        # print(f"encoder_hidden output: {self.encoder.get_hidden(encoder_hidden)[0]}")
         # print(f"target intent: {target_intent}")
 
         loss_intent = criterion_intent(nnoutput, target_intent)
@@ -179,14 +187,14 @@ class seq2seq(object):
         # showPlot(plot_losses)
 
 
-    def fit(self, dataset, epochs, learning_rate, print_every=500):
+    def fit(self, train, dev, epochs, learning_rate, print_every=500):
 
         for i in range(epochs):
             print(f"******Epoch: {i}********")
-            self.trainIters(dataset, learning_rate=learning_rate, print_every=print_every)
-            intent_true, intent_pred, slots_true, slots_pred = self.predict_and_get_labels(dataset)
+            self.trainIters(train, learning_rate=learning_rate, print_every=print_every)
+            intent_true, intent_pred, slots_true, slots_pred = self.predict_and_get_labels(dev)
             print('  predicting:')
-            intent_assessment, slots_assessment = assess(dataset, intent_true, intent_pred, slots_true, slots_pred,
+            intent_assessment, slots_assessment = assess(dev, intent_true, intent_pred, slots_true, slots_pred,
                                                          plot=False)
 
     def evaluate(self,input_tensor, SOS_token, EOS_token):
@@ -198,18 +206,15 @@ class seq2seq(object):
             input_length = input_tensor.size(0)
             encoder_hidden = self.encoder.initHidden(self.device)
 
-            encoder_outputs = torch.zeros(input_length, self.encoder.hidden_size, device=self.device)
-
             for ei in range(input_length):
                 encoder_output, encoder_hidden = self.encoder(input_tensor[ei],
                                                          encoder_hidden)
-                encoder_outputs[ei] += encoder_output[0, 0]
 
             decoder_input = torch.tensor([[SOS_token]], device=self.device)  # SOS
 
             decoder_hidden = encoder_hidden
 
-            nnoutput = self.ff_nn(encoder_hidden[0])
+            nnoutput = self.ff_nn(self.encoder.get_hidden(encoder_hidden)[0])
 
             # print(f"nn output: {nnoutput}")
 
@@ -273,6 +278,17 @@ class seq2seq(object):
 
         return intent_pred, slots_pred
 
+
+    def pretrained_embeddings(self, dataset, embeddings):
+
+        for i in tqdm(range(dataset.words_converter.no_entries())):
+            word = dataset.words_converter.id2T(i)
+            try:
+                # print(f"before: {self.encoder.embedding.weight[i]}")
+                self.encoder.embedding.weight[i].data.copy_(torch.from_numpy(embeddings[word]))
+                # print(f"after: {self.encoder.embedding.weight[i]}")
+            except:
+                pass
 
     def dump(self,path):
         torch.save(self, path)

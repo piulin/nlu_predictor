@@ -1,6 +1,6 @@
 import argparse
 from argparse import RawTextHelpFormatter
-from defaults import CNN_CONFIG, EPOCHS, learning_rate, hidden_size, default_pred_file
+from defaults import CNN_CONFIG, EPOCHS, learning_rate, hidden_size, default_pred_file, lstm_dr, lstm_bidirectional
 
 
 class parser(object):
@@ -24,7 +24,7 @@ class parser(object):
         self.test_parser.set_defaults(action="test")
 
         self.test_parser.add_argument('-m', metavar='model', type=str,
-                                      help='Path to the CNN model to be loaded.', required=True)
+                                      help='Path to the model to be loaded.', required=True)
 
         self.test_parser.add_argument('-test-data', metavar='dir', type=str, help='Data to be tested', required=True)
         self.test_parser.add_argument('-train-data', metavar='dir', type=str, help='To populate the indices.',
@@ -32,15 +32,37 @@ class parser(object):
 
         self.test_parser.add_argument('-O', metavar='out_json', type=str, help='predicted intent and slots', default=default_pred_file)
 
+        # continue training parser
+
+        self.cont_parser = self.subparsers.add_parser('continue', help='continue training.',
+                                                      formatter_class=RawTextHelpFormatter)
+
+        self.cont_parser.set_defaults(action="continue")
+
+        self.cont_parser.add_argument('-e', metavar='epochs', type=int, default=EPOCHS,
+                                       help='Configures the #epochs')
+        self.cont_parser.add_argument('-m', metavar='model', type=str,
+                                      help='Path to the model to be loaded.', required=True)
+        self.cont_parser.add_argument('-train-data', metavar='dir', type=str, help='Data used to train the network.',
+                                       required=True)
+        self.cont_parser.add_argument('-o', metavar='output_model', type=str,
+                                       help='Provide a path to model to be saved.')
+
+        self.cont_parser.add_argument('-lr', metavar='learning_rate', type=float, default=learning_rate,
+                                       help='Sets the learning rate')
+
+        self.cont_parser.add_argument('-D', metavar='test_size_percentage', type=float,
+                                       help='Split the training data into train and dev. Accuracies are computed on the dev data.')
+
         # define the training parser.
 
-        self.train_parser = self.subparsers.add_parser('train', help='Train the CNN providing samples.',
+        self.train_parser = self.subparsers.add_parser('train', help='Learn a predictor providing samples.',
                                                        formatter_class=RawTextHelpFormatter)
 
         self.train_parser.set_defaults(action="train")
 
         self.train_parser.add_argument('-C', metavar='ffnn_config', type=str,
-                                       help='Loads the CNN configuration.', default=CNN_CONFIG)
+                                       help='Loads the FFNN configuration.', default=CNN_CONFIG)
 
         self.train_parser.add_argument('-e', metavar='epochs', type=int, default=EPOCHS,
                                        help='Configures the #epochs')
@@ -54,7 +76,28 @@ class parser(object):
         self.train_parser.add_argument('-o', metavar='output_model', type=str,
                                        help='Provide a path to model to be saved.')
 
+        self.train_parser.add_argument('-D', metavar='test_size_percentage', type=float, help='Split the training data into train and dev. Accuracies are computed on the dev data.')
+
         self.train_parser.add_argument('-train-data', metavar='dir', type=str, help='Data used to train the network.', required=True)
+        self.train_parser.add_argument('-E', metavar='file', type=str, help='Use pretrained embeddings', required=True)
+
+
+        self.train_subparsers = self.train_parser.add_subparsers(title='RNN_type', help='Configure the type of seq2seq network.',required=True)
+        self.rnn_parser = self.train_subparsers.add_parser('rnn', help='Use a plain seq2seq RNN.',
+                                                            formatter_class=RawTextHelpFormatter)
+
+        self.rnn_parser.set_defaults(architecture='rnn')
+
+        self.lstm_parser = self.train_subparsers.add_parser('lstm', help='Use a seq2seq LSTM.',
+                                                      formatter_class=RawTextHelpFormatter)
+
+        self.lstm_parser.set_defaults(architecture='lstm')
+
+        self.lstm_parser.add_argument('-bidirectional',
+                                      help='Decide to use a bidirectional LSTM or not.', action='store_true', default=lstm_bidirectional)
+
+        self.lstm_parser.add_argument( '-dropout', metavar='dropout', type=float,
+                                      help='Set the dropout of the LSTM.', default=lstm_dr )
 
 
     def parse_args(self):

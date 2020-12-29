@@ -1,15 +1,16 @@
 
 import parser
-import engine
 
 
 
 def run(args) :
+    import engine
 
     # pick out the action.
     if args['action'] == 'train':
         engine.train(args)
-
+    elif args['action'] == 'continue':
+        engine.cont(args)
     else:
         engine.test(args)
 

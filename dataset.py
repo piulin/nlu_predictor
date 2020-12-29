@@ -26,6 +26,7 @@ class dataset(object):
         # intent id structure
         self.intent_converter = intent_converter
 
+
         self.stcs_literals = []
         self.stcs = []
         self.slots = []
@@ -119,18 +120,18 @@ class dataset(object):
         w *= 1. / s
         return w
 
-    def train_test_splits(self):
+    def train_test_splits(self, test_size):
 
         train = dataset(self.device)
         test = dataset(self.device)
 
         train.stcs, test.stcs, train.slots, test.slots = train_test_split(self.stcs,
                                                                           self.slots,
-                                                                          test_size=0.2,
+                                                                          test_size=test_size,
                                                                           random_state=0)
         _, _, train.intents, test.intents = train_test_split(self.stcs,
                                                              self.intents,
-                                                             test_size=0.2,
+                                                             test_size=test_size,
                                                              random_state=0)
 
         train.slots_converter = self.slots_converter
