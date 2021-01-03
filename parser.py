@@ -1,6 +1,7 @@
 import argparse
 from argparse import RawTextHelpFormatter
-from defaults import CNN_CONFIG, EPOCHS, learning_rate, hidden_size, default_pred_file, lstm_dr, lstm_bidirectional
+from defaults import CNN_CONFIG, EPOCHS, learning_rate, hidden_size, default_pred_file, lstm_dr, lstm_bidirectional, \
+    BATCH_SIZE
 
 
 class parser(object):
@@ -10,7 +11,7 @@ class parser(object):
         Defines the command-line arguments. Check the help [-h] to learn more.
         """
         self.parser = argparse.ArgumentParser(description='NLU predictor.', formatter_class=RawTextHelpFormatter)
-        self.parser.add_argument('-b', metavar='batch_size', type=int, help='Sets the batch size.')
+        self.parser.add_argument('-b', metavar='batch_size', type=int, help='Sets the batch size.',default=BATCH_SIZE)
 
         self.parser.add_argument('--cuda-device', metavar='gpu_id', type=int, default=0,
                                  help='Selects the cuda device. If -1, then CPU is selected.')
@@ -79,7 +80,7 @@ class parser(object):
         self.train_parser.add_argument('-D', metavar='test_size_percentage', type=float, help='Split the training data into train and dev. Accuracies are computed on the dev data.')
 
         self.train_parser.add_argument('-train-data', metavar='dir', type=str, help='Data used to train the network.', required=True)
-        self.train_parser.add_argument('-E', metavar='file', type=str, help='Use pretrained embeddings', required=True)
+        self.train_parser.add_argument('-E', metavar='file', type=str, help='Use pretrained embeddings')
 
 
         self.train_subparsers = self.train_parser.add_subparsers(title='RNN_type', help='Configure the type of seq2seq network.',required=True)

@@ -1,3 +1,5 @@
+import sys
+
 from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
 import seaborn as sn
 import pandas as pd
@@ -8,8 +10,16 @@ def plot_confusion_matrix(cm, classes, figsize= (10,7)):
                   columns = [i for i in classes])
     plt.figure(figsize = figsize )
     sn.heatmap(df_cm, annot=True,fmt='g')
+    plt.show()
 
 def assess(dataset, intent_true, intent_pred, slots_true, slots_pred, plot=True):
+
+
+
+    if (len(intent_true) != len(intent_pred) or len(slots_true) != len(slots_pred)):
+
+        print("Cannot assess. Dimension mismatch", file=sys.stderr)
+
     cm_intent = confusion_matrix(intent_true, intent_pred)
     labels_intent = [dataset.intent_converter.id2T(i) for i in range(dataset.intent_converter.no_entries())]
     if plot:
@@ -22,7 +32,8 @@ def assess(dataset, intent_true, intent_pred, slots_true, slots_pred, plot=True)
     print(f"fscore: {fscore_intent}")
 
     cm_slots = confusion_matrix(slots_true, slots_pred)
-    labels_slots = [dataset.slots_converter.id2T(i) for i in range(dataset.slots_converter.no_entries())]
+    labels_slots = dataset.get_labels_slots()
+    #print(labels_slots)
     if plot:
         plot_confusion_matrix(cm_slots, labels_slots, (30, 15))
     precision_slots, recall_slots, fscore_slots, _ = precision_recall_fscore_support(slots_true, slots_pred,

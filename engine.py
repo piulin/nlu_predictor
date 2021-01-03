@@ -4,6 +4,7 @@ import gensim
 import torch
 
 from ai.seq2se2q_rnn import seq2seq
+from assessment import assess
 from dataset import dataset
 from writer import predictions2json
 
@@ -24,9 +25,6 @@ def train(args):
     device = get_device(args)
 
     # read training samples from disk, and prepare the dataset (i.e., shuffle, scaling, and moving the data to tensors.)
-
-
-
     dts = dataset(device)
 
     dts.read_training_dataset( args ['train_data'] )
@@ -34,12 +32,16 @@ def train(args):
     train_dts, test_dts = dts, dts
 
     if args['D'] != None:
-        train_dts, test_dts = dts.train_test_splits(args['D'])
+        train_dts, test_dts = dts.train_test_splits(args['D'], td=False)
+
+
 
     classifier = seq2seq(dts.words_converter.no_entries(),
                           dts.slots_converter.no_entries(),
                           dts.intent_converter.no_entries(),
                           device,
+                         train_dts.words_converter.T2id('<PAD>'),
+                         train_dts.slots_converter.T2id('<PAD>'),
                           args)
 
 
@@ -48,10 +50,15 @@ def train(args):
                                                                 binary=True)
         classifier.pretrained_embeddings( train_dts, embeddings )
 
+
     try:
-        classifier.fit( train_dts, test_dts, args ['e'], args['lr'] )
+        classifier.fit( train_dts, test_dts, args ['e'], args['b'],  args['lr'] )
     except KeyboardInterrupt:
         pass
+
+
+    intent_true, intent_pred, slots_true, slots_pred = classifier.predict_and_get_labels_batch(test_dts, args['b'])
+    assess(dts,intent_true, intent_pred, slots_true, slots_pred)
 
     if args['o'] != None:
 

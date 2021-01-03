@@ -5,7 +5,7 @@ CONFIGS
 '''
 import torch.nn as nn
 
-BATCH_SIZE = 128
+BATCH_SIZE = 32
 BATCH_TEST = BATCH_SIZE
 EPOCHS = 10
 learning_rate = 0.01
