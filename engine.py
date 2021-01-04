@@ -5,7 +5,7 @@ import torch
 
 from ai.seq2se2q_rnn import seq2seq
 from assessment import assess
-from dataset import dataset
+from dataset import dataset, test_dataset
 from writer import predictions2json
 
 
@@ -46,7 +46,7 @@ def train(args):
 
 
     if args['E'] != None:
-        embeddings = gensim.models.KeyedVectors.load_word2vec_format(args['E'],
+        embeddings = gensim.models.KeyedVectors.load_word2vec_format(args['E'][0],
                                                                 binary=True)
         classifier.pretrained_embeddings( train_dts, embeddings )
 
@@ -71,8 +71,6 @@ def cont(args):
     # get our working device
     device = get_device(args)
 
-    # read training samples from disk, and prepare the dataset (i.e., shuffle, scaling, and moving the data to tensors.)
-
     dts = dataset(device)
 
     dts.read_training_dataset(args['train_data'])
@@ -85,7 +83,7 @@ def cont(args):
     classifier = seq2seq.load( args ['m'] )
 
     try:
-        classifier.fit(train_dts, test_dts, args['e'], args['lr'])
+        classifier.fit(train_dts, test_dts, args ['e'], args['b'],  args['lr'] )
     except KeyboardInterrupt:
         pass
 
@@ -107,17 +105,18 @@ def test (args):
 
     net = seq2seq.load( args['m'] )
 
-    dts = dataset('cpu')
+    dts = dataset(device)
     dts.read_training_dataset(args['train_data'])
-    test  = dataset(device,
+    test  = test_dataset(device,
                     words_converter=dts.words_converter,
                     slots_converter=dts.slots_converter,
                     intent_converter=dts.intent_converter)
+
     test.read_test_dataset( args['test_data'] )
 
     print(dts.intent_converter.no_entries())
     # # predict!
-    intent_pred, slots_pred = net.predict( test )
+    intent_pred, slots_pred = net.predict_batch( test, args['b'] )
 
 
     predictions2json(test, intent_pred, slots_pred, args['O'])

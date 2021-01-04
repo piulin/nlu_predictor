@@ -3,21 +3,21 @@
   "fully_connected": {
     "fci": {
       "input": -1,
-      "output": 128,
+      "output": 256,
       "drop_out": 0.2
     },
     "fc2": {
-      "input": 128,
-      "output": 64,
+      "input": 256,
+      "output": 128,
       "drop_out": 0.2
     },
     "fc3": {
-      "input": 64,
-      "output": 32,
+      "input": 128,
+      "output": 64,
       "drop_out": 0.1
     },
     "fcn": {
-      "input": 32,
+      "input": 64,
       "output": -1
     }
   }

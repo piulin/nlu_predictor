@@ -26,21 +26,23 @@ class seq2seq(object):
                  padding_idx_slots,
                  args):
 
-        #hidden_size = 256
-        #nwords = dts.words_converter.no_entries()
-        #nslots = dts.slots_converter.no_entries()
         self.padding_idx_words = padding_idx_words
         self.padding_idx_slots = padding_idx_slots
         hidden_size = args['hs']
+
+        self.bidirectional = args['bidirectional']
+
         if args['architecture'] == 'lstm':
             self.encoder = EncoderLSTM(nwords,
+                                       args['wes'],
                                        hidden_size,
                                        bidirectional=args['bidirectional'],
                                        dropout=args['dropout'],
-                                       freeze_embeddings=args['E'] != None,
+                                       freeze_embeddings=args['E'][1] == 'True' if args['E'] != None else False,
                                        padding_idx=padding_idx_words).to(device)
-            self.decoder = DecoderLSTM(hidden_size,
-                                       nslots,
+            self.decoder = DecoderLSTM(nslots,
+                                       args['ses'],
+                                       hidden_size*2 if self.bidirectional else hidden_size,
                                        bidirectional=args['bidirectional'],
                                        dropout=args['dropout'],
                                        padding_idx=padding_idx_slots).to(device)
@@ -49,7 +51,7 @@ class seq2seq(object):
             self.encoder = EncoderRNN(nwords, hidden_size).to(device)
             self.decoder = DecoderRNN(hidden_size, nslots).to(device)
 
-        self.ff_nn = NeuralNet(args['C'], hidden_size, nintents).to(device)
+        self.ff_nn = NeuralNet(args['C'], hidden_size*2 if self.bidirectional else hidden_size, nintents).to(device)
         self.device = device
 
 
@@ -87,28 +89,31 @@ class seq2seq(object):
 
         # decoder_input = torch.tensor([[dts.slots_converter.T2id('<SOS>')]], device=device)
 
-        nnoutput = self.ff_nn(self.encoder.get_hidden(hidden)[0])
+        if self.bidirectional:
 
-        # print(nnoutput.shape)
-        # print(nnoutput)
+            hperm = hidden[0].permute(1,0,2)
+            cperm = hidden[1].permute(1,0,2)
+
+            hperm = hperm.reshape(1, batch_size, hidden[0].shape[2]*2 )
+            cperm = cperm.reshape(1, batch_size, hidden[1].shape[2]*2 )
+
+            decoder_hidden = (hperm,cperm)
+
+        else:
+            decoder_hidden = hidden
+
+
+
+
+        nnoutput = self.ff_nn(decoder_hidden[0][0])
 
         loss_intent = criterion_intent(nnoutput, intents)
         loss += loss_intent
-
-        decoder_hidden = hidden
 
 
 
         pred, hidden = self.decoder(Y, lengths_Y, decoder_hidden)
 
-        # print(f'pred: {pred[:,:-1,:]}')
-        # print(f'Y: {Y[:,1:]}')
-        #
-        # print(f'pred: {pred[:, :-1, :].shape}')
-        # print(f'Y: {Y[:, 1:].shape}')
-        #
-        # print(f'pred: {pred[:, :-1, :]}')
-        # print(f'Y: {Y[:, 1:].shape}')
 
         for i in range(batch_size):
             loss += criterion_slots(pred[:, :-1, :][i], Y[:, 1:][i])
@@ -123,72 +128,6 @@ class seq2seq(object):
 
         return loss.item() / Y[0].shape[0], loss_intent.item()
 
-        #
-        # encoder_hidden = self.encoder.initHidden(self.device)
-        #
-        # encoder_optimizer.zero_grad()
-        # decoder_optimizer.zero_grad()
-        # ff_nn_optimizer.zero_grad()
-        #
-        # input_length = input_tensor.size(0)
-        # target_length = target_tensor.size(0)
-        # loss = 0.
-        #
-        # for ei in range(input_length):
-        #     encoder_output, encoder_hidden = self.encoder(
-        #         input_tensor[ei], encoder_hidden)
-        #
-        # decoder_input = torch.tensor([[SOS_token]], device=self.device)
-        #
-        # decoder_hidden = encoder_hidden
-        #
-        # # decide the intent
-        # nnoutput = self.ff_nn(self.encoder.get_hidden(encoder_hidden)[0])
-        #
-        # # print(f"nn output: {nnoutput}")
-        # # print(f"encoder_hidden output: {self.encoder.get_hidden(encoder_hidden)[0]}")
-        # # print(f"target intent: {target_intent}")
-        #
-        # loss_intent = criterion_intent(nnoutput, target_intent)
-        # loss += loss_intent
-        #
-        # # topv, topi = nnoutput.topk(1)
-        #
-        # use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
-        #
-        # if use_teacher_forcing:
-        #     # if False:
-        #     # Teacher forcing: Feed the target as the next input
-        #     for di in range(target_length):
-        #         decoder_output, decoder_hidden = self.decoder(
-        #             decoder_input, decoder_hidden)
-        #         loss += criterion_slots(decoder_output, target_tensor[di])
-        #         decoder_input = target_tensor[di]  # Teacher forcing
-        #
-        # else:
-        #     # Without teacher forcing: use its own predictions as the next input
-        #     for di in range(target_length):
-        #         decoder_output, decoder_hidden = self.decoder(
-        #             decoder_input, decoder_hidden)
-        #         topv, topi = decoder_output.topk(1)
-        #         decoder_input = topi.squeeze().detach()  # detach from history as input
-        #         # print(f"decoder output {decoder_output}")
-        #         # print(f"target tensor {target_tensor[di]}")
-        #
-        #         # print(f"{criterion(decoder_output, target_tensor[di])}")
-        #         # print(decoder_output.shape)
-        #         loss += criterion_slots(decoder_output, target_tensor[di])
-        #         # if decoder_input.item() == EOS_token:
-        #         # break
-        #         # sys.exit(0)
-        #
-        # loss.backward()
-        #
-        # encoder_optimizer.step()
-        # decoder_optimizer.step()
-        # ff_nn_optimizer.step()
-        #
-        # return loss.item() / target_length, loss_intent.item()
 
 
     def trainIters(self,
@@ -275,7 +214,7 @@ class seq2seq(object):
         # exit(0)
 
 
-    def evaluate_batch(self, X, lengths_X, batch_size, SOS_token):
+    def evaluate_batch(self, X, lengths_X, batch_size, SOS_token, sorted = True):
         with torch.no_grad():
 
             self.ff_nn.eval()
@@ -288,14 +227,25 @@ class seq2seq(object):
 
             hidden = self.encoder.initHidden(self.device, batch_size)
 
-            output, hidden = self.encoder(X, lengths_X, hidden)
+            output, hidden = self.encoder(X, lengths_X, hidden, sorted=sorted)
+
+            if self.bidirectional:
+
+                hperm = hidden[0].permute(1, 0, 2)
+                cperm = hidden[1].permute(1, 0, 2)
+
+                hperm = hperm.reshape(1, batch_size, hidden[0].shape[2] * 2)
+                cperm = cperm.reshape(1, batch_size, hidden[1].shape[2] * 2)
+
+                decoder_hidden = (hperm, cperm)
+
+            else:
+                decoder_hidden = hidden
 
 
-            nnoutput = self.ff_nn(self.encoder.get_hidden(hidden)[0])
+            nnoutput = self.ff_nn(decoder_hidden[0][0])
 
             intent_pred = [out.topk(1)[1].item() for out in nnoutput]
-
-            decoder_hidden = hidden
 
             decoder_input = torch.ones(batch_size,1, dtype=torch.long).to(self.device) * SOS_token
             lengths_Y = torch.ones(batch_size,dtype=torch.long)
@@ -304,7 +254,7 @@ class seq2seq(object):
 
             for i in range(cols):
 
-                pred, decoder_hidden = self.decoder(decoder_input, lengths_Y, decoder_hidden)
+                pred, decoder_hidden = self.decoder(decoder_input, lengths_Y, decoder_hidden, sorted=sorted)
 
                 for j, p in enumerate(pred):
                     pslot = p.topk(1)[1].item()
@@ -314,7 +264,9 @@ class seq2seq(object):
 
             for i, (length, decoded) in enumerate(zip(lengths_X, decoded_words)):
                 # print(int(length.item()))
-                decoded_words[i] = decoded[:int(length.item())]
+
+                # -1 accounting for the EOS token. lengths_X hast EOS into account.
+                decoded_words[i] = decoded[:(int(length.item())-1)]
 
 
             # pred, hidden = self.decoder(Y, lengths_Y, decoder_hidden)
@@ -356,16 +308,42 @@ class seq2seq(object):
                 decoder_output, decoder_hidden = self.decoder(
                     decoder_input, decoder_hidden)
                 topv, topi = decoder_output.data.topk(1)
-                # if topi.item() == EOS_token:
-                #    decoded_words.append('<EOS>')
-                #    break
-                # else:
-                # decoded_words.append(slot_converter.id2T(topi.item()))
+
                 decoded_words.append(topi.item())
                 decoder_input = topi.squeeze().detach()
 
             return decoded_words, pred_intent
 
+    def predict_batch(self, test_dataset, batch_size):
+
+        intent_pred = []
+
+        slots_pred = []
+
+        # print(test_dataset.stcs[0])
+
+
+        test_iter = DataLoader(dataset=test_dataset,
+                               batch_size=batch_size,
+                               collate_fn=test_dataset.collate_fn)
+
+        for batch_id, batch_data in enumerate(test_iter):
+            # print(batch_data[0][0])
+            pred_slots, pred_intent = self.evaluate_batch(batch_data[0],
+                                batch_data[1],
+                                batch_data[0].shape[0],
+                                test_dataset.slots_converter.T2id('<SOS>'),
+                                sorted=False)
+
+
+            intent_pred.extend(pred_intent)
+
+            # ss = []
+            # for pred_slot in  pred_slots:
+            #     ss.extend(pred_slot)
+            slots_pred.extend(pred_slots)
+
+        return intent_pred, slots_pred
 
     def predict_and_get_labels_batch( self, test_dataset, batch_size ):
 

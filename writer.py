@@ -15,7 +15,7 @@ def predictions2json(dataset, intents_pred, slots_pred, outfile):
 
             slot_entry = {}
 
-            for stc_idx, i in enumerate(slot[:-1]):
+            for stc_idx, i in enumerate(slot):
 
                 key = dataset.slots_converter.id2T(i)
                 if key != '-':
@@ -33,4 +33,4 @@ def predictions2json(dataset, intents_pred, slots_pred, outfile):
 
             root[str(idx)] = entry
             idx += 1
-        json.dump(root, f, indent=3)
+        json.dump(root, f, indent=3, ensure_ascii=False)

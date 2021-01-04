@@ -8,6 +8,7 @@ from sklearn.model_selection import train_test_split
 from seq_id import seq_id
 from utils import normalizeString, tokenize
 import numpy as np
+from nltk import word_tokenize
 
 
 class dataset(object):
@@ -75,7 +76,7 @@ class dataset(object):
 
                 slots_dictionary = entry["slots"]
                 # +1 make room for <SOS>
-                slots_id = [self.slots_converter.T2id('-')] * (len(tokens_id) + 1)
+                slots_id = [self.slots_converter.T2id('-')] * len(tokens_id)
                 slots_id [ 0 ]  = self.slots_converter.T2id('<SOS>')
 
                 no_slots_in_stc = 0
@@ -206,10 +207,10 @@ class dataset(object):
         maxsize = max(sizes)
 
         X = torch.ones((batch_size, maxsize), dtype=torch.long) * self.words_converter.T2id('<PAD>')
-        # account for the SOS
-        Y = torch.ones((batch_size, maxsize + 1), dtype=torch.long) * self.slots_converter.T2id('<PAD>')
+
+        Y = torch.ones((batch_size, maxsize), dtype=torch.long) * self.slots_converter.T2id('<PAD>')
         intent = torch.zeros( batch_size, dtype=torch.long )
-        sizes_array_X = torch.zeros( batch_size)
+        sizes_array_X = torch.zeros( batch_size )
         sizes_array_Y = torch.zeros( batch_size )
 
         # copy over the actual sequences
@@ -219,11 +220,11 @@ class dataset(object):
             X[i, 0:x_len] = torch.tensor(sequence[:x_len])
             sequence = data[j][1]
             #also SOS
-            Y[i, 0:x_len+1] = torch.tensor(sequence[:x_len+1])
+            Y[i, 0:x_len] = torch.tensor(sequence[:x_len])
             sequence = data[j][2]
             intent[i] = torch.tensor(sequence)
             sizes_array_X[i] = sizes[j]
-            sizes_array_Y[i] = sizes[j] + 1
+            sizes_array_Y[i] = sizes[j]
 
         X = X.to(self.device)
         Y = Y.to(self.device)
@@ -267,7 +268,7 @@ class test_dataset(dataset):
                 text = normalizeString(text)
                 tokens = tokenize(text)
                 self.stcs_literals.append(tokens)
-                tokens_id = [self.words_converter.T2id(id) for id in tokens]
+                tokens_id = [self.words_converter.T2id(id, lock=True) for id in tokens]
                 tokens_id.append(self.words_converter.T2id('<EOS>'))
                 self.stcs.append(tokens_id)
                 self.lengths.append(len(tokens_id))
@@ -289,8 +290,6 @@ class test_dataset(dataset):
         # print(data)
         batch_size = len(data)
         sizes = [ l[1] for l in data ]
-
-        iter_steps = np.argsort(-np.array(sizes))
         maxsize = max(sizes)
 
         X = torch.ones((batch_size, maxsize), dtype=torch.long) * self.words_converter.T2id('<PAD>')
@@ -298,11 +297,11 @@ class test_dataset(dataset):
         sizes_array_X = torch.zeros( batch_size)
 
         # copy over the actual sequences
-        for i, j in enumerate(iter_steps):
-            x_len = sizes[j]
-            sequence = data[j][0]
+        for i in range(batch_size):
+            x_len = sizes[i]
+            sequence = data[i][0]
             X[i, 0:x_len] = torch.tensor(sequence[:x_len])
-            sizes_array_X[i] = sizes[j]
+            sizes_array_X[i] = sizes[i]
 
         X = X.to(self.device)
         # sizes_array_X =  sizes_array_X.to(self.device)

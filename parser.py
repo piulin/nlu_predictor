@@ -1,7 +1,7 @@
 import argparse
 from argparse import RawTextHelpFormatter
 from defaults import CNN_CONFIG, EPOCHS, learning_rate, hidden_size, default_pred_file, lstm_dr, lstm_bidirectional, \
-    BATCH_SIZE
+    BATCH_SIZE, word_embeddings_size, slot_embeddings_size
 
 
 class parser(object):
@@ -72,15 +72,21 @@ class parser(object):
                                        help='Sets the learning rate')
 
         self.train_parser.add_argument('-hs', metavar='hidden_size', type=int, default=hidden_size,
-                                       help='Sets the learning rate')
+                                       help='Sets the hidden state size')
 
         self.train_parser.add_argument('-o', metavar='output_model', type=str,
                                        help='Provide a path to model to be saved.')
 
+        self.train_parser.add_argument('-wes', metavar='word_embeddings_size', type=int,
+                                       help='Set the word embeddings size.', default=word_embeddings_size)
+
+        self.train_parser.add_argument('-ses', metavar='slot_embeddings_size', type=int,
+                                       help='Set the slot embeddings size.', default=slot_embeddings_size)
+
         self.train_parser.add_argument('-D', metavar='test_size_percentage', type=float, help='Split the training data into train and dev. Accuracies are computed on the dev data.')
 
         self.train_parser.add_argument('-train-data', metavar='dir', type=str, help='Data used to train the network.', required=True)
-        self.train_parser.add_argument('-E', metavar='file', type=str, help='Use pretrained embeddings')
+        self.train_parser.add_argument('-E', metavar=['file','freeze_embeddings'], nargs=2, help='Use pretrained embeddings')
 
 
         self.train_subparsers = self.train_parser.add_subparsers(title='RNN_type', help='Configure the type of seq2seq network.',required=True)

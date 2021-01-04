@@ -7,7 +7,8 @@ import torch.nn.functional as F
 
 class EncoderLSTM(nn.Module):
     def __init__(self,
-                 input_size,
+                 number_of_words,
+                 embeddings_size,
                  hidden_size,
                  bidirectional,
                  dropout,
@@ -16,7 +17,7 @@ class EncoderLSTM(nn.Module):
 
         super(EncoderLSTM, self).__init__()
         self.hidden_size = hidden_size
-        self.embedding = nn.Embedding(input_size, hidden_size, padding_idx=padding_idx)
+        self.embedding = nn.Embedding(number_of_words, embeddings_size, padding_idx=padding_idx)
         self.freeze_embeddings = freeze_embeddings
 
         if freeze_embeddings:
@@ -25,15 +26,17 @@ class EncoderLSTM(nn.Module):
 
 
         self.bidirectional = bidirectional
-        self.lstm = nn.LSTM(hidden_size, hidden_size, bidirectional=bidirectional, batch_first=True)
+        self.lstm = nn.LSTM(embeddings_size, hidden_size, bidirectional=bidirectional, batch_first=True)
         self.dropout_layer = nn.Dropout(p=dropout)
 
-    def forward(self, input, lengths , hidden ):
+    def forward(self, input, lengths , hidden, sorted=True ):
 
 
         embedded = self.embedding(input)
 
-        X = torch.nn.utils.rnn.pack_padded_sequence(embedded, lengths, batch_first=True)
+        embedded = self.dropout_layer(embedded)
+
+        X = torch.nn.utils.rnn.pack_padded_sequence(embedded, lengths, batch_first=True, enforce_sorted=sorted)
 
 
         X, hidden = self.lstm(X, hidden)
@@ -59,26 +62,28 @@ class EncoderLSTM(nn.Module):
 
 class DecoderLSTM(nn.Module):
     def __init__(self,
+                 number_of_slots,
+                 embeddings_size,
                  hidden_size,
-                 output_size,
                  bidirectional,
                  dropout,
                  padding_idx):
         super(DecoderLSTM, self).__init__()
 
         self.hidden_size = hidden_size
-        self.bidirectional = bidirectional
-        self.embedding = nn.Embedding(output_size, hidden_size, padding_idx=padding_idx)
-        self.lstm = nn.LSTM(hidden_size, hidden_size, bidirectional=bidirectional, batch_first=True)
-        self.out = nn.Linear(hidden_size*2 if bidirectional else hidden_size, output_size)
+        self.embedding = nn.Embedding(number_of_slots, embeddings_size, padding_idx=padding_idx)
+        self.lstm = nn.LSTM(embeddings_size, hidden_size, batch_first=True)
+        self.out = nn.Linear(hidden_size, number_of_slots)
         self.softmax = nn.LogSoftmax(dim=2)
         self.dropout_layer = nn.Dropout(p=dropout)
 
-    def forward(self, input, lengths, hidden):
+    def forward( self, input, lengths, hidden, sorted=True ):
 
         X = self.embedding(input)
 
-        X = torch.nn.utils.rnn.pack_padded_sequence(X, lengths, batch_first=True)
+        X = self.dropout_layer(X)
+
+        X = torch.nn.utils.rnn.pack_padded_sequence(X, lengths, batch_first=True, enforce_sorted=sorted)
 
         # output = F.relu(output)
         X, hidden = self.lstm(X, hidden)
@@ -96,7 +101,4 @@ class DecoderLSTM(nn.Module):
         return X, hidden
 
     def initHidden(self,device, batch_size):
-        if self.bidirectional:
-            return (torch.zeros(2, batch_size, self.hidden_size, device=device),torch.zeros(2, batch_size, self.hidden_size, device=device))
-        else:
             return (torch.zeros(1, batch_size, self.hidden_size, device=device),torch.zeros(1, batch_size, self.hidden_size, device=device))

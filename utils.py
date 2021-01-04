@@ -3,6 +3,7 @@ import re
 
 import time
 import math
+from nltk import word_tokenize
 
 
 def tokenize(text: str):
@@ -14,7 +15,7 @@ def tokenize(text: str):
 
     # space_splits = re.findall(r"[\w']+", text)
 
-    return text.split()
+    return word_tokenize(text)
 
 
 def unicodeToAscii(s):
@@ -27,7 +28,7 @@ def unicodeToAscii(s):
 def normalizeString(s):
     # s = unicodeToAscii(s.lower().strip())
     # s = re.sub(r"[0-9]+", r"NUM", s)
-    s = re.sub(r"([.!?])", r" \1", s)
+    #s = re.sub(r"([.!?])", r" \1", s)
     # s = re.sub(r"[^a-zA-Z.!?0-9]+", r" ", s)
     return s
 
