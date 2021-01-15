@@ -64,7 +64,7 @@ class dataset(object):
                 tokens = tokenize(text)
                 self.stcs_literals.append(tokens)
                 tokens_id = [self.words_converter.T2id(id) for id in tokens]
-                tokens_id.append(self.words_converter.T2id('<EOS>'))
+                tokens_id.append(self.words_converter.T2id('</s>'))
                 self.stcs.append(tokens_id)
                 self.lengths.append(len(tokens_id))
 
@@ -255,7 +255,7 @@ class test_dataset(dataset):
 
 
 
-    def read_test_dataset(self, input_path):
+    def read_test_dataset(self, input_path, lock=True):
         with open(input_path) as f:
             data = json.load(f)
             self.no_samples = len(data)
@@ -268,8 +268,8 @@ class test_dataset(dataset):
                 text = normalizeString(text)
                 tokens = tokenize(text)
                 self.stcs_literals.append(tokens)
-                tokens_id = [self.words_converter.T2id(id, lock=True) for id in tokens]
-                tokens_id.append(self.words_converter.T2id('<EOS>'))
+                tokens_id = [self.words_converter.T2id(id, lock=lock) for id in tokens]
+                tokens_id.append(self.words_converter.T2id('</s>'))
                 self.stcs.append(tokens_id)
                 self.lengths.append(len(tokens_id))
 

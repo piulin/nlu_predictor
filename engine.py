@@ -44,10 +44,9 @@ def train(args):
                          train_dts.slots_converter.T2id('<PAD>'),
                           args)
 
-
     if args['E'] != None:
         embeddings = gensim.models.KeyedVectors.load_word2vec_format(args['E'][0],
-                                                                binary=True)
+                                                                     binary=True)
         classifier.pretrained_embeddings( train_dts, embeddings )
 
 
@@ -107,12 +106,21 @@ def test (args):
 
     dts = dataset(device)
     dts.read_training_dataset(args['train_data'])
+
+
     test  = test_dataset(device,
                     words_converter=dts.words_converter,
                     slots_converter=dts.slots_converter,
                     intent_converter=dts.intent_converter)
 
-    test.read_test_dataset( args['test_data'] )
+    if args['E'] != None:
+        test.read_test_dataset( args['test_data'], lock=False )
+        embeddings = gensim.models.KeyedVectors.load_word2vec_format(args['E'],
+                                                                     binary=True)
+        net.pretrained_embeddings(test, embeddings)
+
+    else:
+        test.read_test_dataset( args['test_data'], lock=True )
 
     print(dts.intent_converter.no_entries())
     # # predict!

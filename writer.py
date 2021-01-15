@@ -1,5 +1,8 @@
 import json
 
+from utils import detokenize
+
+
 def predictions2json(dataset, intents_pred, slots_pred, outfile):
     with open(outfile, 'w') as f:
         root = {}
@@ -27,7 +30,8 @@ def predictions2json(dataset, intents_pred, slots_pred, outfile):
                         slot_entry[key] = stc[stc_idx] + ' '
 
             for key, val in slot_entry.items():
-                slot_entry[key] = slot_entry[key].rstrip()
+                stoks = slot_entry[key].rstrip()
+                slot_entry[key] = detokenize(stoks.split())
 
             entry['slots'] = slot_entry
 

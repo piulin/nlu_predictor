@@ -443,6 +443,10 @@ class seq2seq(object):
 
     def pretrained_embeddings(self, dataset, embeddings):
 
+        ne = nn.Embedding(dataset.words_converter.no_entries(), self.encoder.embeddings_size, padding_idx=self.encoder.embedding.padding_idx).to(self.device)
+        oesize = self.encoder.embedding.weight.data.shape[0]
+        ne.weight.data[:oesize,:].copy_(self.encoder.embedding.weight.data)
+        self.encoder.embedding = ne
         for i in tqdm(range(dataset.words_converter.no_entries())):
             word = dataset.words_converter.id2T(i)
             try:

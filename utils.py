@@ -4,6 +4,7 @@ import re
 import time
 import math
 from nltk import word_tokenize
+from nltk.tokenize.treebank import TreebankWordDetokenizer
 
 
 def tokenize(text: str):
@@ -32,6 +33,8 @@ def normalizeString(s):
     # s = re.sub(r"[^a-zA-Z.!?0-9]+", r" ", s)
     return s
 
+def detokenize(s):
+    return TreebankWordDetokenizer().detokenize(s)
 
 def asMinutes(s):
     m = math.floor(s / 60)

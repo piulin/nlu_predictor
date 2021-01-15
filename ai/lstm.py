@@ -17,6 +17,7 @@ class EncoderLSTM(nn.Module):
 
         super(EncoderLSTM, self).__init__()
         self.hidden_size = hidden_size
+        self.embeddings_size = embeddings_size
         self.embedding = nn.Embedding(number_of_words, embeddings_size, padding_idx=padding_idx)
         self.freeze_embeddings = freeze_embeddings
 
@@ -28,6 +29,7 @@ class EncoderLSTM(nn.Module):
         self.bidirectional = bidirectional
         self.lstm = nn.LSTM(embeddings_size, hidden_size, bidirectional=bidirectional, batch_first=True)
         self.dropout_layer = nn.Dropout(p=dropout)
+
 
     def forward(self, input, lengths , hidden, sorted=True ):
 

@@ -33,6 +33,9 @@ class parser(object):
 
         self.test_parser.add_argument('-O', metavar='out_json', type=str, help='predicted intent and slots', default=default_pred_file)
 
+        self.test_parser.add_argument('-E', metavar='file',
+                                       help='Use pretrained embeddings')
+
         # continue training parser
 
         self.cont_parser = self.subparsers.add_parser('continue', help='continue training.',
