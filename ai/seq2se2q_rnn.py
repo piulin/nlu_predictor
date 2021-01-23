@@ -40,16 +40,12 @@ class seq2seq(object):
                                        dropout=args['dropout'],
                                        freeze_embeddings=args['E'][1] == 'True' if args['E'] != None else False,
                                        padding_idx=padding_idx_words).to(device)
-            self.decoder = DecoderLSTM(nslots,
+            self.decoder = DecoderLSTM(nwords,
+                                        nslots,
                                        args['ses'],
                                        hidden_size*2 if self.bidirectional else hidden_size,
-                                       bidirectional=args['bidirectional'],
                                        dropout=args['dropout'],
-                                       padding_idx=padding_idx_slots).to(device)
-
-        else :
-            self.encoder = EncoderRNN(nwords, hidden_size).to(device)
-            self.decoder = DecoderRNN(hidden_size, nslots).to(device)
+                                       padding_idx=padding_idx_words).to(device)
 
         self.ff_nn = NeuralNet(args['C'], hidden_size*2 if self.bidirectional else hidden_size, nintents).to(device)
         self.device = device
@@ -64,7 +60,6 @@ class seq2seq(object):
               ff_nn_optimizer,
               criterion_intent,
               criterion_slots,
-              SOS_token,
               teacher_forcing_ratio=0.5):
 
         # print(batch_data)
@@ -112,7 +107,7 @@ class seq2seq(object):
 
 
 
-        pred, hidden = self.decoder(Y, lengths_Y, decoder_hidden)
+        pred, hidden = self.decoder(X, lengths_X, decoder_hidden)
 
 
         for i in range(batch_size):
@@ -177,8 +172,7 @@ class seq2seq(object):
                                       decoder_optimizer,
                                       ff_nn_optimizer,
                                       criterion_intent,
-                                      criterion_slots,
-                                      dataset.slots_converter.T2id('<SOS>'))
+                                      criterion_slots)
             print_loss_total += loss
             plot_loss_total += loss
             print_loss_intent += loss_intent
@@ -214,7 +208,7 @@ class seq2seq(object):
         # exit(0)
 
 
-    def evaluate_batch(self, X, lengths_X, batch_size, SOS_token, sorted = True):
+    def evaluate_batch(self, X, lengths_X, batch_size, sorted = True):
         with torch.no_grad():
 
             self.ff_nn.eval()
@@ -247,25 +241,36 @@ class seq2seq(object):
 
             intent_pred = [out.topk(1)[1].item() for out in nnoutput]
 
-            decoder_input = torch.ones(batch_size,1, dtype=torch.long).to(self.device) * SOS_token
-            lengths_Y = torch.ones(batch_size,dtype=torch.long)
+
+            pred, hidden = self.decoder(X, lengths_X, decoder_hidden, sorted=sorted)
+
+            # decoder_input = torch.ones(batch_size,1, dtype=torch.long).to(self.device) * SOS_token
+            # lengths_Y = torch.ones(batch_size,dtype=torch.long)
 
             decoded_words = [[] for i in range(batch_size)]
 
+            # iterate cols
             for i in range(cols):
 
-                pred, decoder_hidden = self.decoder(decoder_input, lengths_Y, decoder_hidden, sorted=sorted)
+                # iterate batches
+                for j in range(pred.shape[0]):
 
-                for j, p in enumerate(pred):
-                    pslot = p.topk(1)[1].item()
-                    decoder_input[j] = pslot
+                    curr_pred = pred[j, i, :]
+                    pslot = curr_pred.topk(1)[1].item()
                     decoded_words[j].append(pslot)
+
+                #pred, decoder_hidden = self.decoder(decoder_input, lengths_Y, decoder_hidden, sorted=sorted)
+
+                # for j, p in enumerate(pred):
+                #     pslot = p.topk(1)[1].item()
+                #     decoder_input[j] = pslot
+                #     decoded_words[j].append(pslot)
 
 
             for i, (length, decoded) in enumerate(zip(lengths_X, decoded_words)):
                 # print(int(length.item()))
 
-                # -1 accounting for the EOS token. lengths_X hast EOS into account.
+                # -1 accounting for the EOS token. lengths_X has EOS into account.
                 decoded_words[i] = decoded[:(int(length.item())-1)]
 
 
@@ -275,44 +280,6 @@ class seq2seq(object):
             # print(decoded_words)
             return decoded_words, intent_pred
 
-
-    def evaluate(self,input_tensor, SOS_token):
-        with torch.no_grad():
-
-            self.ff_nn.eval()
-            self.encoder.eval()
-            self.decoder.eval()
-
-            # input_tensor = tensorFromSentence(input_lang, sentence)
-            input_length = input_tensor.size(0)
-            encoder_hidden = self.encoder.initHidden(self.device)
-
-            for ei in range(input_length):
-                encoder_output, encoder_hidden = self.encoder(input_tensor[ei],
-                                                         encoder_hidden)
-
-            decoder_input = torch.tensor([[SOS_token]], device=self.device)  # SOS
-
-            decoder_hidden = encoder_hidden
-
-            nnoutput = self.ff_nn(self.encoder.get_hidden(encoder_hidden)[0])
-
-            # print(f"nn output: {nnoutput}")
-
-            topv, pred_intent = nnoutput.topk(1)
-
-            decoded_words = []
-            # decoder_attentions = torch.zeros(max_length, max_length)
-
-            for di in range(input_length):
-                decoder_output, decoder_hidden = self.decoder(
-                    decoder_input, decoder_hidden)
-                topv, topi = decoder_output.data.topk(1)
-
-                decoded_words.append(topi.item())
-                decoder_input = topi.squeeze().detach()
-
-            return decoded_words, pred_intent
 
     def predict_batch(self, test_dataset, batch_size):
 
@@ -332,7 +299,6 @@ class seq2seq(object):
             pred_slots, pred_intent = self.evaluate_batch(batch_data[0],
                                 batch_data[1],
                                 batch_data[0].shape[0],
-                                test_dataset.slots_converter.T2id('<SOS>'),
                                 sorted=False)
 
 
@@ -369,8 +335,7 @@ class seq2seq(object):
             # print(batch_data)
             pred_slots, pred_intent = self.evaluate_batch(batch_data[0],
                                 batch_data[3],
-                                batch_data[0].shape[0],
-                                test_dataset.slots_converter.T2id('<SOS>'))
+                                batch_data[0].shape[0])
 
 
 
@@ -401,44 +366,6 @@ class seq2seq(object):
 
         return intent_true, intent_pred, slots_true, slots_pred
 
-    def predict_and_get_labels( self, dataset ):
-
-        intent_true = [i.item() for i in dataset.intents]
-        intent_pred = []
-
-        slots_true = []
-        slots_pred = []
-
-        for stc, slot, intent in zip(dataset.stcs, dataset.slots, dataset.intents):
-
-            pred_slots, pred_intent = self.evaluate(stc,
-                                               dataset.slots_converter.T2id('<SOS>'))
-            intent_pred.append(pred_intent.item())
-
-            for slot_true, slot_pred in zip(slot, pred_slots):
-                slots_true.append(slot_true.item())
-                slots_pred.append(slot_pred)
-
-        return intent_true, intent_pred, slots_true, slots_pred
-
-    def predict(self, dataset):
-
-        intent_pred = []
-
-        slots_pred = []
-
-        for stc in dataset.stcs:
-
-            pred_slots, pred_intent = self.evaluate(stc,
-                                               dataset.slots_converter.T2id('<SOS>'))
-            intent_pred.append(pred_intent.item())
-
-            ss = []
-            for slot_pred in pred_slots:
-                ss.append(slot_pred)
-            slots_pred.append(ss)
-
-        return intent_pred, slots_pred
 
 
     def pretrained_embeddings(self, dataset, embeddings):

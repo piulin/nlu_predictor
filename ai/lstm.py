@@ -64,16 +64,16 @@ class EncoderLSTM(nn.Module):
 
 class DecoderLSTM(nn.Module):
     def __init__(self,
+                 number_of_words,
                  number_of_slots,
                  embeddings_size,
                  hidden_size,
-                 bidirectional,
                  dropout,
                  padding_idx):
         super(DecoderLSTM, self).__init__()
 
         self.hidden_size = hidden_size
-        self.embedding = nn.Embedding(number_of_slots, embeddings_size, padding_idx=padding_idx)
+        self.embedding = nn.Embedding(number_of_words, embeddings_size, padding_idx=padding_idx)
         self.lstm = nn.LSTM(embeddings_size, hidden_size, batch_first=True)
         self.out = nn.Linear(hidden_size, number_of_slots)
         self.softmax = nn.LogSoftmax(dim=2)
