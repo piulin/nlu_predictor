@@ -92,21 +92,10 @@ class parser(object):
         self.train_parser.add_argument('-E', metavar=['file','freeze_embeddings'], nargs=2, help='Use pretrained embeddings')
 
 
-        self.train_subparsers = self.train_parser.add_subparsers(title='RNN_type', help='Configure the type of seq2seq network.',required=True)
-        self.rnn_parser = self.train_subparsers.add_parser('rnn', help='Use a plain seq2seq RNN.',
-                                                            formatter_class=RawTextHelpFormatter)
-
-        self.rnn_parser.set_defaults(architecture='rnn')
-
-        self.lstm_parser = self.train_subparsers.add_parser('lstm', help='Use a seq2seq LSTM.',
-                                                      formatter_class=RawTextHelpFormatter)
-
-        self.lstm_parser.set_defaults(architecture='lstm')
-
-        self.lstm_parser.add_argument('-bidirectional',
+        self.train_parser.add_argument('-bidirectional',
                                       help='Decide to use a bidirectional LSTM or not.', action='store_true', default=lstm_bidirectional)
 
-        self.lstm_parser.add_argument( '-dropout', metavar='dropout', type=float,
+        self.train_parser.add_argument( '-dropout', metavar='dropout', type=float,
                                       help='Set the dropout of the LSTM.', default=lstm_dr )
 
 
