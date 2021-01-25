@@ -24,6 +24,7 @@ class seq2seq(object):
                  device,
                  padding_idx_words,
                  padding_idx_slots,
+                 SOS_token,
                  args):
 
         self.padding_idx_words = padding_idx_words
@@ -32,23 +33,25 @@ class seq2seq(object):
 
         self.bidirectional = args['bidirectional']
 
-        if args['architecture'] == 'lstm':
-            self.encoder = EncoderLSTM(nwords,
-                                       args['wes'],
-                                       hidden_size,
-                                       bidirectional=args['bidirectional'],
-                                       dropout=args['dropout'],
-                                       freeze_embeddings=args['E'][1] == 'True' if args['E'] != None else False,
-                                       padding_idx=padding_idx_words).to(device)
-            self.decoder = DecoderLSTM(nwords,
-                                        nslots,
-                                       args['ses'],
-                                       hidden_size*2 if self.bidirectional else hidden_size,
-                                       dropout=args['dropout'],
-                                       padding_idx=padding_idx_words).to(device)
+
+        self.encoder = EncoderLSTM(nwords,
+                                   args['wes'],
+                                   hidden_size,
+                                   bidirectional=args['bidirectional'],
+                                   dropout=args['dropout'],
+                                   freeze_embeddings=args['E'][1] == 'True' if args['E'] != None else False,
+                                   padding_idx=padding_idx_words).to(device)
+        self.decoder = DecoderLSTM(nwords,
+                                    nslots,
+                                   args['ses'],
+                                   hidden_size*2 if self.bidirectional else hidden_size,
+                                   dropout=args['dropout'],
+                                   padding_idx_words=padding_idx_words,
+                                   padding_idx_slots=padding_idx_slots).to(device)
 
         self.ff_nn = NeuralNet(args['C'], hidden_size*2 if self.bidirectional else hidden_size, nintents).to(device)
         self.device = device
+        self.SOS_token = SOS_token
 
 
 
@@ -107,7 +110,7 @@ class seq2seq(object):
 
 
 
-        pred, hidden = self.decoder(X, lengths_X, decoder_hidden)
+        pred, hidden = self.decoder(X, Y, lengths_X, decoder_hidden)
 
 
         for i in range(batch_size):
@@ -242,29 +245,31 @@ class seq2seq(object):
             intent_pred = [out.topk(1)[1].item() for out in nnoutput]
 
 
-            pred, hidden = self.decoder(X, lengths_X, decoder_hidden, sorted=sorted)
+            # pred, hidden = self.decoder(X, lengths_X, decoder_hidden, sorted=sorted)
 
-            # decoder_input = torch.ones(batch_size,1, dtype=torch.long).to(self.device) * SOS_token
-            # lengths_Y = torch.ones(batch_size,dtype=torch.long)
+            decoder_input_slot = torch.ones(batch_size,1, dtype=torch.long).to(self.device) * self.SOS_token
+            lengths_Y = torch.ones(batch_size,dtype=torch.long)
 
             decoded_words = [[] for i in range(batch_size)]
 
             # iterate cols
             for i in range(cols):
 
-                # iterate batches
-                for j in range(pred.shape[0]):
-
-                    curr_pred = pred[j, i, :]
-                    pslot = curr_pred.topk(1)[1].item()
-                    decoded_words[j].append(pslot)
-
-                #pred, decoder_hidden = self.decoder(decoder_input, lengths_Y, decoder_hidden, sorted=sorted)
-
-                # for j, p in enumerate(pred):
-                #     pslot = p.topk(1)[1].item()
-                #     decoder_input[j] = pslot
+                # # iterate batches
+                # for j in range(pred.shape[0]):
+                #
+                #     curr_pred = pred[j, i, :]
+                #     pslot = curr_pred.topk(1)[1].item()
                 #     decoded_words[j].append(pslot)
+
+                decoder_input_word = torch.unsqueeze(X[:, i],1)  ##
+
+                pred, decoder_hidden = self.decoder(decoder_input_word, decoder_input_slot, lengths_Y, decoder_hidden, sorted=sorted)
+
+                for j, p in enumerate(pred):
+                    pslot = p.topk(1)[1].item()
+                    decoder_input_slot[j] = pslot
+                    decoded_words[j].append(pslot)
 
 
             for i, (length, decoded) in enumerate(zip(lengths_X, decoded_words)):

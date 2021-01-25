@@ -42,6 +42,7 @@ def train(args):
                           device,
                          train_dts.words_converter.T2id('<PAD>'),
                          train_dts.slots_converter.T2id('<PAD>'),
+                         train_dts.slots_converter.T2id('<SOS>'),
                           args)
 
     if args['E'] != None:

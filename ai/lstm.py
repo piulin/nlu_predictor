@@ -69,21 +69,30 @@ class DecoderLSTM(nn.Module):
                  embeddings_size,
                  hidden_size,
                  dropout,
-                 padding_idx):
+                 padding_idx_words,
+                 padding_idx_slots):
         super(DecoderLSTM, self).__init__()
 
         self.hidden_size = hidden_size
-        self.embedding = nn.Embedding(number_of_words, embeddings_size, padding_idx=padding_idx)
+        self.word_embedding = nn.Embedding(number_of_words, embeddings_size, padding_idx=padding_idx_words)
+        self.slots_embeddings = nn.Embedding(number_of_slots, embeddings_size)
         self.lstm = nn.LSTM(embeddings_size, hidden_size, batch_first=True)
         self.out = nn.Linear(hidden_size, number_of_slots)
         self.softmax = nn.LogSoftmax(dim=2)
-        self.dropout_layer = nn.Dropout(p=dropout)
+        self.dropout_layer_words = nn.Dropout(p=dropout)
+        self.dropout_layer_slots = nn.Dropout(p=dropout)
 
-    def forward( self, input, lengths, hidden, sorted=True ):
+    def forward( self, input_word, input_slot, lengths, hidden, sorted=True ):
 
-        X = self.embedding(input)
+        Xw = self.word_embedding(input_word)
 
-        X = self.dropout_layer(X)
+        Xw = self.dropout_layer_words(Xw)
+
+        Xs = self.slots_embeddings(input_slot)
+
+        Xs = self.dropout_layer_slots(Xs)
+
+        X = Xw + Xs
 
         X = torch.nn.utils.rnn.pack_padded_sequence(X, lengths, batch_first=True, enforce_sorted=sorted)
 
