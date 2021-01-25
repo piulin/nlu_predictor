@@ -65,6 +65,11 @@ class parser(object):
 
         self.train_parser.set_defaults(action="train")
 
+        self.train_parser.add_argument('--no-training-predictions', action='store_true', default=False,help='Turn this flag on to avoid predicting on the dev dataset in each training epoch')
+
+        self.train_parser.add_argument('--save-every', metavar='#epochs', type=int, help="saves a model every #epochs specified" \
+                                                                                        "in this option", default=None)
+
         self.train_parser.add_argument('-C', metavar='ffnn_config', type=str,
                                        help='Loads the FFNN configuration.', default=CNN_CONFIG)
 

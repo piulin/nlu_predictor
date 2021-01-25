@@ -5,6 +5,7 @@ import time
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
+from transformers import get_linear_schedule_with_warmup
 
 from ai.ffnn import NeuralNet
 from ai.lstm import EncoderLSTM, DecoderLSTM
@@ -32,20 +33,20 @@ class seq2seq(object):
 
         self.bidirectional = args['bidirectional']
 
-        if args['architecture'] == 'lstm':
-            self.encoder = EncoderLSTM(nwords,
-                                       args['wes'],
-                                       hidden_size,
-                                       bidirectional=args['bidirectional'],
-                                       dropout=args['dropout'],
-                                       freeze_embeddings=args['E'][1] == 'True' if args['E'] != None else False,
-                                       padding_idx=padding_idx_words).to(device)
-            self.decoder = DecoderLSTM(nwords,
-                                        nslots,
-                                       args['ses'],
-                                       hidden_size*2 if self.bidirectional else hidden_size,
-                                       dropout=args['dropout'],
-                                       padding_idx=padding_idx_words).to(device)
+
+        self.encoder = EncoderLSTM(nwords,
+                                   args['wes'],
+                                   hidden_size,
+                                   bidirectional=args['bidirectional'],
+                                   dropout=args['dropout'],
+                                   freeze_embeddings=args['E'][1] == 'True' if args['E'] != None else False,
+                                   padding_idx=padding_idx_words).to(device)
+        self.decoder = DecoderLSTM(nwords,
+                                    nslots,
+                                   args['ses'],
+                                   hidden_size*2 if self.bidirectional else hidden_size,
+                                   dropout=args['dropout'],
+                                   padding_idx=padding_idx_words).to(device)
 
         self.ff_nn = NeuralNet(args['C'], hidden_size*2 if self.bidirectional else hidden_size, nintents).to(device)
         self.device = device
@@ -58,6 +59,9 @@ class seq2seq(object):
               encoder_optimizer,
               decoder_optimizer,
               ff_nn_optimizer,
+              encoder_scheduler,
+              decoder_scheduler,
+              fnn_scheduler,
               criterion_intent,
               criterion_slots,
               teacher_forcing_ratio=0.5):
@@ -121,6 +125,11 @@ class seq2seq(object):
         decoder_optimizer.step()
         ff_nn_optimizer.step()
 
+        encoder_scheduler.step()
+        decoder_scheduler.step()
+        fnn_scheduler.step()
+
+
         return loss.item() / Y[0].shape[0], loss_intent.item()
 
 
@@ -128,6 +137,7 @@ class seq2seq(object):
     def trainIters(self,
                    dataset,
                    batch_size,
+                   no_epochs,
                    print_every=1000,
                    plot_every=100,
                    learning_rate=0.01):
@@ -138,9 +148,19 @@ class seq2seq(object):
         plot_loss_total = 0  # Reset every plot_every
         print_loss_intent = 0
 
-        encoder_optimizer = optim.Adam([p for p in self.encoder.parameters() if p.requires_grad], lr=learning_rate)
-        decoder_optimizer = optim.Adam([p for p in self.decoder.parameters() if p.requires_grad], lr=learning_rate)
-        ff_nn_optimizer = optim.Adam([p for p in self.ff_nn.parameters() if p.requires_grad], lr=learning_rate)
+        encoder_optimizer = optim.AdamW([p for p in self.encoder.parameters() if p.requires_grad], lr=learning_rate)
+        decoder_optimizer = optim.AdamW([p for p in self.decoder.parameters() if p.requires_grad], lr=learning_rate)
+        ff_nn_optimizer = optim.AdamW([p for p in self.ff_nn.parameters() if p.requires_grad], lr=learning_rate)
+
+        encoder_scheduler = get_linear_schedule_with_warmup(encoder_optimizer,
+                                                    num_training_steps=no_epochs,
+                                                            num_warmup_steps=0)
+        decoder_scheduler = get_linear_schedule_with_warmup(decoder_optimizer,
+                                                            num_training_steps=no_epochs,
+                                                            num_warmup_steps=0)
+        fnn_scheduler = get_linear_schedule_with_warmup(ff_nn_optimizer,
+                                                            num_training_steps=no_epochs,
+                                                        num_warmup_steps=0)
 
         slots_weights = dataset.slots_weights()
         criterion_intent = nn.NLLLoss()
@@ -171,6 +191,9 @@ class seq2seq(object):
                                       encoder_optimizer,
                                       decoder_optimizer,
                                       ff_nn_optimizer,
+                                       encoder_scheduler,
+                                       decoder_scheduler,
+                                       fnn_scheduler,
                                       criterion_intent,
                                       criterion_slots)
             print_loss_total += loss
@@ -195,15 +218,20 @@ class seq2seq(object):
         # showPlot(plot_losses)
 
 
-    def fit(self, train, dev, epochs, batch_size, learning_rate, print_every=50):
+    def fit(self, train, dev, epochs, batch_size, learning_rate, save_every, save_model_path, print_every=50, do_predict=True):
 
         for i in range(epochs):
             print(f"******Epoch: {i}********")
-            self.trainIters(train, batch_size, learning_rate=learning_rate, print_every=print_every)
-            print('  predicting:')
-            intent_true, intent_pred, slots_true, slots_pred = self.predict_and_get_labels_batch(dev, batch_size)
-            intent_assessment, slots_assessment = assess(dev, intent_true, intent_pred, slots_true, slots_pred,
-                                                         plot=False)
+            self.trainIters(train, batch_size, learning_rate=learning_rate, print_every=print_every, no_epochs=epochs)
+
+            if do_predict:
+                print('  predicting:')
+                intent_true, intent_pred, slots_true, slots_pred = self.predict_and_get_labels_batch(dev, batch_size)
+                intent_assessment, slots_assessment = assess(dev, intent_true, intent_pred, slots_true, slots_pred,
+                                                             plot=False)
+            if save_every != None and i % save_every  == 0:
+                self.dump(save_model_path + '.epoch' + str(i))
+
 
         # exit(0)
 

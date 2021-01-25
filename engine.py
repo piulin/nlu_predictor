@@ -51,7 +51,8 @@ def train(args):
 
 
     try:
-        classifier.fit( train_dts, test_dts, args ['e'], args['b'],  args['lr'] )
+        classifier.fit( train_dts, test_dts, args ['e'], args['b'],  args['lr'], args['save_every'] ,
+                        args ['o'], do_predict=not args['no_training_predictions'])
     except KeyboardInterrupt:
         pass
 
